@@ -1,0 +1,182 @@
+# Switches for manual Control
+input_boolean:
+  living_room_automations:
+    name: Living Room Automations
+    initial: true
+    icon: hass:sofa-outline
+  movie_mode:
+    name: Movie Mode
+    initial: false
+    icon: hass:video-vintage
+  tv_mode:
+    name: TV Mode
+    initial: false
+    icon: hass:television-classic
+
+template:
+  sensor:
+    - name: Living Room Lights # control for automations that turn lights on
+      state: >
+        {% if   is_state('input_boolean.living_room_automations', 'off') %}
+          off
+        {% elif is_state('input_boolean.movie_mode',              'on') %}
+          movie
+        {% elif is_state('input_boolean.tv_mode',                 'on') %}
+          tv
+        {% elif is_state('input_boolean.guest_mode',              'on')  %}
+          guest
+        {% elif is_state('binary_sensor.illuminate_status', 'on')
+            and not is_state('media_player.living_room_tv', 'off') %}
+          on
+        {% elif is_state('binary_sensor.illuminate_status',       'on') %}
+          on
+        {% else %}
+          off
+        {% endif%}
+      attributes:
+        "off": > # Control for automations that turn lights off
+          {% if   is_state('input_boolean.living_room_automations', 'off') %}
+            off
+          {% elif is_state('input_boolean.movie_mode',              'on') %}
+            off
+          {% elif is_state('input_boolean.tv_mode',                 'on') %}
+            off
+          {% elif is_state('input_boolean.guest_mode',              'on')  %}
+            off
+          {% elif is_state('binary_sensor.illuminate_status', 'on')
+              and not is_state('media_player.living_room_tv', 'off') %}
+            off
+          {% elif is_state('binary_sensor.illuminate_status',       'on') %}
+            on
+          {% else %}
+            on
+          {% endif%}
+
+automation:
+  # Lights On automation
+  - id: '1626409782308'
+    alias: Living Room - Light - On
+    trigger:
+      # Trigger if motion
+    - platform: state
+      entity_id: binary_sensor.living_room_motion
+      to: 'on'
+      id: motion
+      # Trigger if template changes to on
+      # This will turn the light on if input_boolean.movie_mode is turned off
+    - platform: state
+      entity_id: sensor.living_room_lights
+      to: 'on'
+      id: sensor
+    condition:
+    - condition: or
+      conditions:
+      # -------- or 1 --------
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: motion
+        - condition: state
+          entity_id: sensor.living_room_lights
+          state: 'on'
+      # -------- or 2 --------
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: sensor
+        - condition: state
+          entity_id: binary_sensor.living_room_motion
+          state: 'on'
+    action:
+    - service: python_script.flux
+      data:
+        entity_id: light.couch
+    mode: single
+
+  # Living Room Lights Off
+  - id: '1626408169756'
+    alias: Living Room - Lights - Off
+    description: ''
+    trigger:
+    # Trigger if no motion for 1 minute  
+    - platform: state
+      entity_id: binary_sensor.living_room_motion
+      to: 'off'
+      for: 00:01:00
+    # Trigger if the "off" attribute of sensor.living_room_lights is 'on'
+    - platform: state
+      entity_id: sensor.living_room_lights
+      attribute: 'off'
+      to: 'on'
+    condition:
+    - condition: state
+      entity_id: sensor.living_room_lights
+      state: 'on'
+      attribute: 'off'
+    - condition: state
+      entity_id: binary_sensor.living_room_motion
+      state: 'off'
+      for: 00:01:00
+    action:
+    - service: light.turn_off
+      target:
+        entity_id:
+        - light.living_room_door
+        - light.couch
+        - light.living_room_bulb
+    mode: single
+
+  # Handles special modes
+  - id: '1626408749623'
+    alias: Living Room - Lights - Special
+    description: Guest, movie, tv
+    trigger:
+    - platform: state
+      entity_id: sensor.living_room_lights
+      to: guest
+      id: guest
+    - platform: state
+      entity_id: sensor.living_room_lights
+      to: movie
+      id: movie
+    - platform: state
+      entity_id: sensor.living_room_lights
+      to: tv
+      id: tv
+    condition: []
+    action:
+    - choose:
+      - conditions:
+        - condition: trigger
+          id: guest
+        sequence:
+        - service: light.turn_on
+          target:
+            entity_id: light.couch
+          data:
+            color_temp: 275
+            brightness: 175
+      - conditions:
+        - condition: trigger
+          id: movie
+        sequence:
+        - service: light.turn_on
+          target:
+            entity_id: light.couch
+          data:
+            color_temp: 500
+            brightness: 15
+            transition: 5
+      - conditions:
+        - condition: trigger
+          id: tv
+        sequence:
+        - service: light.turn_on
+          target:
+            entity_id: light.couch
+          data:
+            color_temp: 400
+            brightness: 50
+            transition: 5
+      default: []
+    mode: single
