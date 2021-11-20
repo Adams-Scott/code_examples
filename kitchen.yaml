@@ -1,0 +1,123 @@
+input_boolean:
+  kitchen_automations:
+    name: Kitchen Automations
+    initial: true
+    icon: hass:fridge-outline
+
+# Template sensors allow you to have attributes. The main state of the sensor I 
+#   use for automations that turn on the lights. I then create an attribute
+#   called "off" that controls the "light off" automations.
+template:
+  sensor:
+    - name: kitchen Lights
+      state: >
+        {% if   is_state('input_boolean.kitchen_automations', 'off') %}
+          off
+        {% elif is_state('input_boolean.guest_mode',          'on') %}
+          guest
+        {% elif now().hour <= 6
+        or      now().hour >= 20 -%}
+          night
+        {% elif is_state('binary_sensor.illuminate_status',   'on')%}
+          on
+        {% else %}
+          off
+        {% endif%}
+      attributes:
+        "off": >
+          {% if   is_state('input_boolean.kitchen_automations', 'off') %}
+            off
+          {% elif is_state('input_boolean.guest_mode',          'on') %}
+            off
+          {% elif is_state('binary_sensor.illuminate_status',   'on') %}
+            on
+          {% elif now().hour <= 6 
+          or      now().hour >= 20 -%}
+            on
+          {% else %}
+            on
+          {% endif%}
+
+automation:
+  # Turns main light on
+  - id: '1626149528744'
+    alias: Kitchen - Lights - On
+    description: ''
+
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.kitchen_motion
+      to: 'on'
+    - platform: state # Triggers when the control sensor changes
+      entity_id: sensor.kitchen_lights
+      to: 'on'
+
+    condition:
+    - condition: state
+      entity_id: sensor.kitchen_lights
+      state: 'on'
+    - condition: state # Prevents the control sensor trigger from triggering if I'm not in the kitchen.
+      entity_id: binary_sensor.kitchen_motion
+      state: 'on'
+
+    action:
+    - service: light.turn_on
+      target:
+        entity_id: light.kitchen_overhead
+    mode: single
+
+  # Turns sink light on at night
+  - id: '1626149592926'
+    alias: Kitchen - Lights - On (Night)
+    description: ''
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.kitchen_motion
+      to: 'on'
+    - platform: state
+      entity_id: sensor.kitchen_lights
+      to: night
+
+    condition:
+    - condition: state
+      entity_id: sensor.kitchen_lights
+      state: night
+    - condition: state
+      entity_id: binary_sensor.kitchen_motion
+      state: 'on'
+
+    action:
+    - service: light.turn_on
+      target:
+        entity_id: light.kitchen_sink
+    mode: single
+
+  # Turns kitchen light off if no motion
+  - id: '1626149889832'
+    alias: Kitchen - Lights - Off
+    description: ''
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.kitchen_motion
+      to: 'off'
+      for: 00:01:00
+    - platform: state
+      entity_id: sensor.kitchen_lights
+      to: 'on'
+      attribute: 'off'
+    condition:
+    - condition: state
+      entity_id: sensor.kitchen_lights
+      state: 'on'
+      attribute: 'off'
+    - condition: state
+      entity_id: binary_sensor.kitchen_motion
+      state: 'off'
+      for: 00:01:00
+    action:
+    - service: light.turn_off
+      target:
+        entity_id:
+        - light.kitchen_overhead
+        - light.kitchen_sink
+    mode: single

@@ -1,0 +1,23 @@
+input_boolean:
+  house_automations: # Kill switch for all automations
+    name: House Automations
+    initial: true
+    icon: hass:home-outline
+  guest_mode: # Guest Mode for whole house
+    name: Guest Mode
+    initial: false
+    icon: hass:account-multiple
+
+template:
+  binary_sensor:
+    - name: Illuminate Status # If true, lights are allowed to turn on
+      state: >-
+        {{   now().hour >= 19
+          or now().hour <= 8
+          or state_attr('sun.sun', 'elevation') < 7
+          or states('sensor.outdoor_illuminance') | int < 900 }}
+
+# now().hour >= 19 # After 7 PM
+# now().hour <= 8 # Before 8 AM
+# state_attr('sun.sun', 'elevation') < 7 # If sun below a certain angle (works more consistently throughout the year then sunrise/set)
+# states('sensor.outdoor_illuminance') | int < 900 # Outdoor light sensor for cloudy days
